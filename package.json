@@ -1,0 +1,42 @@
+{
+  "name": "openclaw-sbx-sandbox",
+  "version": "0.1.0",
+  "description": "OpenClaw sandbox backend for Docker Sandboxes (sbx) microVMs.",
+  "license": "MIT",
+  "type": "module",
+  "scripts": {
+    "test": "node --test \"test/*.test.js\"",
+    "test:e2e": "SBX_E2E=1 node --test test/e2e.test.js"
+  },
+  "files": [
+    "index.js",
+    "src/",
+    "openclaw.plugin.json",
+    "README.md",
+    "LICENSE"
+  ],
+  "peerDependencies": {
+    "openclaw": ">=2026.10.1"
+  },
+  "peerDependenciesMeta": {
+    "openclaw": {
+      "optional": true
+    }
+  },
+  "openclaw": {
+    "extensions": [
+      "./index.js"
+    ],
+    "install": {
+      "npmSpec": "openclaw-sbx-sandbox",
+      "defaultChoice": "npm",
+      "minHostVersion": ">=2026.10.1"
+    },
+    "compat": {
+      "pluginApi": ">=2026.10.1"
+    },
+    "build": {
+      "openclawVersion": "2026.10.1"
+    }
+  }
+}

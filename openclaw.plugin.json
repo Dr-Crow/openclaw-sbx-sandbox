@@ -1,0 +1,33 @@
+{
+  "id": "sbx",
+  "categories": ["security"],
+  "activation": { "onStartup": true },
+  "name": "Docker Sandboxes (sbx)",
+  "description": "OpenClaw sandbox backend that runs agent exec and file tools inside Docker Sandboxes (sbx) microVMs, each with its own kernel and Docker engine.",
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "command": { "type": "string", "minLength": 1 },
+      "agent": { "type": "string", "minLength": 1 },
+      "template": { "type": "string", "minLength": 1 },
+      "pull": { "type": "string", "enum": ["always", "missing", "never"] },
+      "cpus": { "type": "integer", "minimum": 1 },
+      "memory": { "type": "string", "pattern": "^[0-9]+[kKmMgG]?[bB]?$" },
+      "kits": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+      "staticMcp": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+      "timeoutSeconds": { "type": "number", "minimum": 1, "maximum": 2147000 }
+    }
+  },
+  "uiHints": {
+    "command": { "label": "sbx command", "help": "Path or name of the sbx CLI." },
+    "agent": { "label": "Agent or kit", "help": "sbx agent name or kit reference used at create time. \"shell\" is a plain exec sandbox." },
+    "template": { "label": "Template", "help": "Optional container image passed as --template.", "advanced": true },
+    "pull": { "label": "Pull policy", "help": "Image pull policy passed as --pull.", "advanced": true },
+    "cpus": { "label": "CPUs", "help": "CPUs per sandbox (--cpus). Default: sbx decides.", "advanced": true },
+    "memory": { "label": "Memory", "help": "Memory per sandbox, e.g. 4g (--memory).", "advanced": true },
+    "kits": { "label": "Mixin kits", "help": "Extra kit references added with --kit.", "advanced": true },
+    "staticMcp": { "label": "Static MCP servers", "help": "sbx MCP gateway server names fixed at create time (--static-mcp).", "advanced": true },
+    "timeoutSeconds": { "label": "Command timeout (s)", "help": "Timeout for sbx management calls such as create.", "advanced": true }
+  }
+}
