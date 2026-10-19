@@ -41,11 +41,15 @@ export function buildCreateArgs({ config, sandboxName, workspaceDir, agentWorksp
   const ro = (p) => (workspaceAccess === "ro" ? `${p}:ro` : p);
   // workspaceAccess "none" => no host files at all: create without a workspace bind mount.
   const paths = [];
+  const clone = config.workspaceMode === "clone" && workspaceAccess !== "none";
   if (workspaceAccess !== "none") {
-    paths.push(ro(workspaceDir));
-    if (agentWorkspaceDir && agentWorkspaceDir !== workspaceDir) paths.push(ro(agentWorkspaceDir));
+    // Clone mode: the primary git repo is mounted read-only and the agent works on a private clone inside the VM.
+    // Extra workspaces are always mounted directly, so the agent workspace (persona and memory files) goes in read-only.
+    paths.push(clone ? workspaceDir : ro(workspaceDir));
+    if (agentWorkspaceDir && agentWorkspaceDir !== workspaceDir) paths.push(clone ? `${agentWorkspaceDir}:ro` : ro(agentWorkspaceDir));
   }
   const args = ["create", config.agent, ...paths, "--name", sandboxName, "--pull", config.pull, "--no-progress"];
+  if (clone) args.push("--clone");
   if (config.template) args.push("--template", config.template);
   if (config.cpus) args.push("--cpus", String(config.cpus));
   if (config.memory) args.push("--memory", config.memory);
@@ -175,7 +179,17 @@ class SbxBackend {
     const access = this.createParams.cfg?.workspaceAccess;
     if (access !== "none") {
       // `sbx create` refuses a missing host path when there is no terminal.
-      await fs.mkdir(this.workspaceDir, { recursive: true });
+      if (config.workspaceMode === "clone") {
+        try {
+          await fs.stat(path.join(this.workspaceDir, ".git"));
+        } catch {
+          throw new Error(
+            `sbx workspaceMode "clone" needs ${this.workspaceDir} to be a git repository; refusing to fall back to a direct mount.`,
+          );
+        }
+      } else {
+        await fs.mkdir(this.workspaceDir, { recursive: true });
+      }
       if (this.agentWorkspaceDir !== this.workspaceDir) {
         await fs.mkdir(this.agentWorkspaceDir, { recursive: true });
       }

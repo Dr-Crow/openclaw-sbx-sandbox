@@ -91,3 +91,29 @@ test("real sbx: create on demand, exec, docker inside, fs bridge, remove", { ski
     await fs.rm(root, { recursive: true, force: true });
   }
 });
+
+test("real sbx: clone mode keeps the host repo untouched", { skip: !enabled, timeout: 600_000 }, async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "sbx-e2e-clone-"));
+  const ws = path.join(root, "repo");
+  await fs.mkdir(ws);
+  const git = (...a) => run(["git", "-C", ws, "-c", "user.name=e2e", "-c", "user.email=e2e@example.com", ...a]);
+  await git("init", "-q", "-b", "main");
+  await fs.writeFile(path.join(ws, "app.txt"), "v1\n");
+  await git("add", "app.txt");
+  await git("commit", "-q", "-m", "init", "--no-verify");
+  const sdk = await loadSdk();
+  const backend = await createBackendFactory({ config: resolveConfig({ command: sbxCmd, workspaceMode: "clone" }), sdk })({
+    scopeKey: `e2e-clone:${process.pid}:${Date.now()}`, workspaceDir: ws, agentWorkspaceDir: ws,
+    cfg: { workspaceAccess: "rw", docker: { env: {} } },
+  });
+  const exec = async (command) => run((await backend.buildExecSpec({ command, env: {}, usePty: false })).argv);
+  try {
+    let r = await exec("echo evil > app.txt && mkdir -p .git/hooks && printf '#!/bin/sh\\n' > .git/hooks/pre-commit && touch /run/sandbox/source/x 2>&1 | head -1");
+    assert.match(r.out + r.err, /Read-only/);
+    assert.equal(await fs.readFile(path.join(ws, "app.txt"), "utf8"), "v1\n", "host file untouched");
+    await assert.rejects(fs.access(path.join(ws, ".git", "hooks", "pre-commit")), "no hook planted on host");
+  } finally {
+    await run([sbxCmd, "rm", "--force", backend.runtimeId]);
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});

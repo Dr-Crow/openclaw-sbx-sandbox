@@ -16,6 +16,7 @@
       "memory": { "type": "string", "pattern": "^[0-9]+[kKmMgG]?[bB]?$" },
       "kits": { "type": "array", "items": { "type": "string", "minLength": 1 } },
       "staticMcp": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+      "workspaceMode": { "type": "string", "enum": ["mount", "clone"] },
       "timeoutSeconds": { "type": "number", "minimum": 1, "maximum": 2147000 }
     }
   },
@@ -28,6 +29,7 @@
     "memory": { "label": "Memory", "help": "Memory per sandbox, e.g. 4g (--memory).", "advanced": true },
     "kits": { "label": "Mixin kits", "help": "Extra kit references added with --kit.", "advanced": true },
     "staticMcp": { "label": "Static MCP servers", "help": "sbx MCP gateway server names fixed at create time (--static-mcp).", "advanced": true },
+    "workspaceMode": { "label": "Workspace mode", "help": "mount: bind-mount the workspace read-write (changes land on the host immediately). clone: the agent works on a private clone inside the VM and the host repo is read-only; fetch results with git. Needs a git repository.", "advanced": true },
     "timeoutSeconds": { "label": "Command timeout (s)", "help": "Timeout for sbx management calls such as create.", "advanced": true }
   }
 }
