@@ -10,6 +10,7 @@ export const DEFAULTS = Object.freeze({
 
 const MAX_TIMEOUT_SECONDS = 2_147_000;
 const PULL = new Set(["always", "missing", "never"]);
+const WORKSPACE_MODES = new Set(["mount", "clone"]);
 const KEYS = new Set([
   "command",
   "agent",
@@ -19,6 +20,7 @@ const KEYS = new Set([
   "memory",
   "kits",
   "staticMcp",
+  "workspaceMode",
   "timeoutSeconds",
 ]);
 
@@ -38,7 +40,7 @@ function strList(name, value) {
 
 /**
  * @param {unknown} raw plugins.entries.sbx.config
- * @returns {{command:string, agent:string, template?:string, pull:string, cpus?:number, memory?:string, kits:string[], staticMcp:string[], timeoutMs:number}}
+ * @returns {{command:string, agent:string, template?:string, pull:string, cpus?:number, memory?:string, kits:string[], staticMcp:string[], workspaceMode:"mount"|"clone", timeoutMs:number}}
  */
 export function resolveConfig(raw) {
   const cfg = raw ?? {};
@@ -50,6 +52,9 @@ export function resolveConfig(raw) {
   }
   if (cfg.pull !== undefined && !PULL.has(cfg.pull)) {
     throw new Error("Invalid sbx plugin config: pull must be one of always, missing, never");
+  }
+  if (cfg.workspaceMode !== undefined && !WORKSPACE_MODES.has(cfg.workspaceMode)) {
+    throw new Error("Invalid sbx plugin config: workspaceMode must be one of mount, clone");
   }
   if (cfg.cpus !== undefined && !(Number.isInteger(cfg.cpus) && cfg.cpus >= 1)) {
     throw new Error("Invalid sbx plugin config: cpus must be an integer >= 1");
@@ -74,6 +79,7 @@ export function resolveConfig(raw) {
     memory: cfg.memory === undefined ? undefined : String(cfg.memory).trim(),
     kits: cfg.kits === undefined ? [] : strList("kits", cfg.kits),
     staticMcp: cfg.staticMcp === undefined ? [] : strList("staticMcp", cfg.staticMcp),
+    workspaceMode: cfg.workspaceMode ?? "mount",
     timeoutMs:
       cfg.timeoutSeconds === undefined ? DEFAULTS.timeoutMs : Math.floor(cfg.timeoutSeconds * 1000),
   };

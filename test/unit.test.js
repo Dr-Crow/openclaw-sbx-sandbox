@@ -178,3 +178,34 @@ test("removeRuntime invalidates the existence cache so the next exec recreates",
   await backend.buildExecSpec({ command: "true", env: {}, usePty: false });
   assert.equal(fake.log().filter((l) => l.startsWith("create ")).length, 2, "recreated after removeRuntime");
 });
+
+test("config: workspaceMode validated, defaults to mount", () => {
+  assert.equal(resolveConfig({}).workspaceMode, "mount");
+  assert.equal(resolveConfig({ workspaceMode: "clone" }).workspaceMode, "clone");
+  assert.throws(() => resolveConfig({ workspaceMode: "copy" }), /workspaceMode must be/);
+});
+
+test("create args: clone mode adds --clone and mounts the agent workspace read-only", () => {
+  const cfg = resolveConfig({ workspaceMode: "clone" });
+  const a = buildCreateArgs({ config: cfg, sandboxName: "n", workspaceDir: "/repo", agentWorkspaceDir: "/agent", workspaceAccess: "rw" });
+  assert.deepEqual(a.slice(0, 4), ["create", "shell", "/repo", "/agent:ro"]);
+  assert.ok(a.includes("--clone"));
+  const same = buildCreateArgs({ config: cfg, sandboxName: "n", workspaceDir: "/repo", agentWorkspaceDir: "/repo", workspaceAccess: "rw" });
+  assert.deepEqual(same.slice(0, 3), ["create", "shell", "/repo"]);
+  assert.equal(same[3], "--name");
+  const none = buildCreateArgs({ config: cfg, sandboxName: "n", workspaceDir: "/repo", agentWorkspaceDir: "/repo", workspaceAccess: "none" });
+  assert.ok(!none.includes("--clone"), "none means no host files at all");
+});
+
+test("factory: clone mode refuses a non-git workspace instead of falling back to a mount", async () => {
+  const fake = fakeSbx();
+  const ws = fs.mkdtempSync(path.join(os.tmpdir(), "ws-"));
+  const backend = await createBackendFactory({ config: resolveConfig({ command: fake.bin, workspaceMode: "clone" }), sdk })({
+    scopeKey: "clone-nogit", workspaceDir: ws, agentWorkspaceDir: ws, cfg: { workspaceAccess: "rw", docker: {} },
+  });
+  await assert.rejects(backend.buildExecSpec({ command: "true", env: {}, usePty: false }), /needs .* to be a git repository/);
+  assert.equal(fake.log().filter((l) => l.startsWith("create ")).length, 0);
+  fs.mkdirSync(path.join(ws, ".git"));
+  await backend.buildExecSpec({ command: "true", env: {}, usePty: false });
+  assert.ok(fake.log().some((l) => l.startsWith("create ") && l.includes("--clone")));
+});

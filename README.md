@@ -29,6 +29,7 @@ openclaw plugins install ./openclaw-sbx-sandbox   # or a packed tarball
 | `pull` | `missing` | `--pull` policy |
 | `cpus`, `memory` | sbx default | `--cpus`, `--memory` |
 | `kits` | `[]` | extra mixin kits (`--kit`) |
+| `workspaceMode` | `mount` | `clone`: the agent works on a private git clone inside the VM and the host repo is read-only (`sbx create --clone`); fetch results with `git fetch sandbox-<name>`. Refuses non-git workspaces rather than falling back to a mount |
 | `staticMcp` | `[]` | sbx MCP gateway servers fixed at create time (`--static-mcp`) |
 | `timeoutSeconds` | 120 | timeout for sbx management calls (create has a 300 s floor) |
 
