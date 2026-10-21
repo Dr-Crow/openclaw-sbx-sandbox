@@ -1,0 +1,48 @@
+// OpenClaw 2026.10.3 config that ran against the shared MCP gateway (mcpproxy-go) with the sbx plugin, transport "ssh".
+// No secrets: the bearer and the gateway token come from the environment (EnvironmentFile= or `set -a; . gateway.env`):
+//   GW_TOKEN_PROJA=...            OPENCLAW_GATEWAY_TOKEN=...      (file mode 0600)
+// Model: the scripted fake model from scripts/fake-model-driver.mjs; replace with a real provider.
+{
+  gateway: { mode: "local", bind: "loopback", port: 18792, auth: { mode: "token" } },
+  update: { checkOnStart: false },
+  telemetry: { enabled: false },
+  models: {
+    catalogRefresh: { enabled: false },          // else the gateway fetches catalog.openclaw.ai at start and every 6 h
+    providers: { fake: { baseUrl: "http://127.0.0.1:18791/v1", apiKey: "fake-not-a-secret", api: "openai-completions",
+      models: [{ id: "fake-model", name: "fake", reasoning: false, input: ["text"], cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 }, contextWindow: 128000, maxTokens: 4096 }] } },
+  },
+  mcp: { servers: { gw_projA: {
+    url: "http://10.0.2.2:18480/mcp/all",        // the gateway VM's front door; /mcp/all only
+    transport: "streamable-http",
+    headers: { Authorization: "Bearer ${GW_TOKEN_PROJA}" },   // `openclaw mcp doctor` warns "literal sensitive value": false positive
+  } } },
+  tools: {
+    profile: "full",
+    deny: ["group:automation"],                  // blocks the agent's cron tool, NOT gateway-owned jobs (heartbeat etc.)
+    sandbox: { tools: { alsoAllow: ["bundle-mcp"] } },   // or ["gw_projA__*"]; without one of them MCP tools vanish in sandboxed turns
+    exec: { ask: "always" },                     // does not gate sandbox exec; host=gateway|node and elevated are refused anyway
+    elevated: { enabled: false },
+    sessions: { visibility: "agent" },
+    agentToAgent: { enabled: false },
+    // toolSearch unset: the model sees tool_search / tool_describe / tool_call and reaches MCP as
+    //   tool_call { id: "mcp:gw_projA:gw_projA__everything__echo", args: { message: "..." } }
+    // set `toolSearch: false` for direct names (gw_projA__everything__echo).
+  },
+  plugins: {
+    allow: ["sbx"],                              // `[]` does NOT mean none: 42 of 66 plugins stayed enabled
+    slots: { memory: "none" },
+    load: { paths: ["/home/jim/src/openclaw-sbx-sandbox"] },
+    entries: { sbx: { enabled: true, config: { agent: "shell", transport: "ssh" } } },
+  },
+  agents: {
+    defaults: {
+      model: { primary: "fake/fake-model" },
+      heartbeat: { every: "0m" },                // the gateway creates a 30 min heartbeat cron job otherwise
+      sandbox: { mode: "all", scope: "agent", backend: "sbx", workspaceAccess: "rw" },
+    },
+    entries: { projA: {
+      workspace: "/home/jim/oc-gw/ws/projA",
+      tools: { allow: ["gw_projA__*", "exec", "read", "write", "edit", "apply_patch"] },
+    } },
+  },
+}

@@ -97,3 +97,11 @@ against a real sbx; add `SBX_E2E_TRANSPORT=ssh` for the ssh transport.
 `scripts/` holds the comparison tooling: `fake-model-driver.mjs` (a scripted OpenAI-compatible "model" that makes OpenClaw call
 `exec`/`write`/`read`/`edit`/`apply_patch` for real, no key needed), `abc-script.json`, `abc-run.sh` (runs it through
 `openclaw agent --local` and prints per-tool latency) and `latency-bench.mjs` (plugin-level exec and fs-bridge latency).
+
+## With an MCP gateway
+
+`examples/openclaw-mcp-gateway.json5` is the config that ran OpenClaw 2026.10.3 against a shared mcpproxy-go gateway while exec, read, write
+and edit ran in the sbx worker (transport `ssh`). `scripts/mcp-run.sh` drives `scripts/mcp-script.json` through a real gateway process,
+`scripts/mcp-policy-variants.sh` records which tool names the model sees under different allow lists, `scripts/gw-start.sh` starts the gateway
+(optionally under `strace -f -e trace=connect`, parsed by `scripts/parse-strace-connect.py`). MCP calls run in the OpenClaw gateway process, never
+in the worker, so the worker needs no token and no route to the gateway. See the design repo's `platform/openclaw-option-abc-results.md`.

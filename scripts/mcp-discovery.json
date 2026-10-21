@@ -1,0 +1,11 @@
+[
+ {"label": "search echo", "tool": "tool_search", "args": {"query": "echo"}},
+ {"label": "search sum", "tool": "tool_search", "args": {"query": "sum of two numbers"}},
+ {"label": "search simulated logging", "tool": "tool_search", "args": {"query": "toggle simulated logging"}},
+ {"label": "search cron schedule", "tool": "tool_search", "args": {"query": "cron schedule job"}},
+ {"label": "search web fetch", "tool": "tool_search", "args": {"query": "fetch web page url"}},
+ {"label": "search process", "tool": "tool_search", "args": {"query": "background process list"}},
+ {"label": "search sessions spawn", "tool": "tool_search", "args": {"query": "spawn subagent session"}},
+ {"label": "search env", "tool": "tool_search", "args": {"query": "environment variables"}},
+ {"label": "search everything", "tool": "tool_search", "args": {"query": "tool", "limit": 20}}
+]
