@@ -108,7 +108,26 @@
   "label": "exec with env + PATH",
   "tool": "exec",
   "args": {
-   "command": "echo \"FOO=$FOO\"; echo \"$PATH\" | cut -c1-90"
+   "command": "echo \"FOO=$FOO\"; echo \"$PATH\" | cut -c1-90",
+   "env": {
+    "FOO": "bar baz"
+   }
+  }
+ },
+ {
+  "label": "exec with workdir=abc",
+  "tool": "exec",
+  "args": {
+   "command": "pwd",
+   "workdir": "abc"
+  }
+ },
+ {
+  "label": "exec pty=true",
+  "tool": "exec",
+  "args": {
+   "command": "tty; echo pty-ok",
+   "pty": true
   }
  },
  {
