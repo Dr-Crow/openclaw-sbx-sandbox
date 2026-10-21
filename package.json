@@ -38,5 +38,13 @@
     "build": {
       "openclawVersion": "2026.10.1"
     }
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Dr-Crow/openclaw-sbx-sandbox.git"
+  },
+  "homepage": "https://github.com/Dr-Crow/openclaw-sbx-sandbox#readme",
+  "bugs": {
+    "url": "https://github.com/Dr-Crow/openclaw-sbx-sandbox/issues"
   }
 }
