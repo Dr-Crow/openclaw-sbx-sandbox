@@ -6,7 +6,7 @@ import { test } from "node:test";
 import { spawnSync } from "node:child_process";
 import { createBackendFactory, createBackendManager } from "../src/backend.js";
 import { resolveConfig } from "../src/config.js";
-import { buildSshConfigText, ensureControlDir, PREPEND_PATH_PREFIX, sshHostFor } from "../src/ssh.js";
+import { buildSshConfigText, ensureControlDir, PREPEND_PATH_PREFIX, resolveExecutablePath, sshHostFor } from "../src/ssh.js";
 
 // Fake sbx (lifecycle only, like unit.test.js) and a fake ssh that logs its argv and runs the remote command locally.
 function fakes() {
@@ -262,4 +262,22 @@ test("re-create after sbx rm: next ssh exec creates the sandbox again", async ()
   await createBackendManager({ config, sdk }).removeRuntime({ entry: { containerName: backend.runtimeId }, config: {} });
   await backend.finalizeExec({ token: (await backend.buildExecSpec({ command: "true", env: {}, usePty: false })).finalizeToken });
   assert.equal(f.sbxLog().filter((l) => l.startsWith("create ")).length, 2);
+});
+
+test("a bare sbx command is resolved to an absolute path for the ssh config (KnownHostsCommand needs one)", async () => {
+  const f = fakes();
+  assert.equal(resolveExecutablePath(f.sbx), f.sbx);
+  assert.equal(resolveExecutablePath("sbx", { PATH: `/nonexistent:${f.dir}` }), f.sbx);
+  assert.equal(resolveExecutablePath("nope-sbx", { PATH: f.dir }), "nope-sbx");
+  const sdk = fakeSdk(f.ssh);
+  const ws = fs.mkdtempSync(path.join(os.tmpdir(), "ws-"));
+  const old = process.env.PATH;
+  process.env.PATH = `${f.dir}:${old}`;
+  try {
+    const backend = await createBackendFactory({ config: resolveConfig({ command: "sbx", transport: "ssh" }), sdk })(params(ws, { scopeKey: "abs" }));
+    await backend.buildExecSpec({ command: "true", env: {}, usePty: false });
+    assert.match(sdk.sessions.at(-1).configText, new RegExp(`KnownHostsCommand "${f.sbx}" ssh known-hosts %H`));
+  } finally {
+    process.env.PATH = old;
+  }
 });
