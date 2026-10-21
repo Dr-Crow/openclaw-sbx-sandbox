@@ -11,6 +11,8 @@ import { resolveConfig } from "../src/config.js";
 
 const enabled = process.env.SBX_E2E === "1";
 const sbxCmd = process.env.SBX_COMMAND || "sbx";
+// SBX_E2E_TRANSPORT=ssh runs the same scenarios over the ssh transport (needs the real OpenClaw SDK).
+const transport = process.env.SBX_E2E_TRANSPORT || "exec";
 
 function run(argv, { input } = {}) {
   return new Promise((resolve, reject) => {
@@ -32,11 +34,13 @@ async function loadSdk() {
   };
 }
 
-test("real sbx: create on demand, exec, docker inside, fs bridge, remove", { skip: !enabled, timeout: 600_000 }, async () => {
+if (enabled && transport === "ssh" && !process.env.OPENCLAW_SANDBOX_SDK) throw new Error("SBX_E2E_TRANSPORT=ssh needs OPENCLAW_SANDBOX_SDK");
+
+test(`real sbx (${transport}): create on demand, exec, docker inside, fs bridge, remove`, { skip: !enabled, timeout: 600_000 }, async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "sbx-e2e-"));
   const ws = path.join(root, "workspace"); // intentionally absent: backend must create it
   const sdk = await loadSdk();
-  const config = resolveConfig({ command: sbxCmd, agent: "shell" });
+  const config = resolveConfig({ command: sbxCmd, agent: "shell", transport });
   const backend = await createBackendFactory({ config, sdk })({
     scopeKey: `e2e:${process.pid}:${Date.now()}`,
     workspaceDir: ws,
@@ -45,7 +49,11 @@ test("real sbx: create on demand, exec, docker inside, fs bridge, remove", { ski
   });
   const exec = async (command) => {
     const spec = await backend.buildExecSpec({ command, env: {}, usePty: false });
-    return run(spec.argv);
+    try {
+      return await run(spec.argv);
+    } finally {
+      await backend.finalizeExec?.({ token: spec.finalizeToken });
+    }
   };
   try {
     const t0 = Date.now();
@@ -76,7 +84,7 @@ test("real sbx: create on demand, exec, docker inside, fs bridge, remove", { ski
       assert.deepEqual(await bridge.readFile({ filePath: "nested/bridge.txt" }), Buffer.from("hello-bridge\n"));
     }
 
-    const mgr = createBackendManager({ config });
+    const mgr = createBackendManager({ config, sdk });
     const entry = { containerName: backend.runtimeId, image: "shell" };
     assert.equal((await mgr.describeRuntime({ entry, config: {} })).running, true);
     await mgr.removeRuntime({ entry, config: {} });
@@ -92,7 +100,7 @@ test("real sbx: create on demand, exec, docker inside, fs bridge, remove", { ski
   }
 });
 
-test("real sbx: clone mode keeps the host repo untouched", { skip: !enabled, timeout: 600_000 }, async () => {
+test(`real sbx (${transport}): clone mode keeps the host repo untouched`, { skip: !enabled, timeout: 600_000 }, async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "sbx-e2e-clone-"));
   const ws = path.join(root, "repo");
   await fs.mkdir(ws);
@@ -102,11 +110,18 @@ test("real sbx: clone mode keeps the host repo untouched", { skip: !enabled, tim
   await git("add", "app.txt");
   await git("commit", "-q", "-m", "init", "--no-verify");
   const sdk = await loadSdk();
-  const backend = await createBackendFactory({ config: resolveConfig({ command: sbxCmd, workspaceMode: "clone" }), sdk })({
+  const backend = await createBackendFactory({ config: resolveConfig({ command: sbxCmd, workspaceMode: "clone", transport }), sdk })({
     scopeKey: `e2e-clone:${process.pid}:${Date.now()}`, workspaceDir: ws, agentWorkspaceDir: ws,
     cfg: { workspaceAccess: "rw", docker: { env: {} } },
   });
-  const exec = async (command) => run((await backend.buildExecSpec({ command, env: {}, usePty: false })).argv);
+  const exec = async (command) => {
+    const spec = await backend.buildExecSpec({ command, env: {}, usePty: false });
+    try {
+      return await run(spec.argv);
+    } finally {
+      await backend.finalizeExec?.({ token: spec.finalizeToken });
+    }
+  };
   try {
     let r = await exec("echo evil > app.txt && mkdir -p .git/hooks && printf '#!/bin/sh\\n' > .git/hooks/pre-commit && touch /run/sandbox/source/x 2>&1 | head -1");
     assert.match(r.out + r.err, /Read-only/);
