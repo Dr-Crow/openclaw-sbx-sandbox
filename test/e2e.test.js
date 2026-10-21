@@ -132,3 +132,59 @@ test(`real sbx (${transport}): clone mode keeps the host repo untouched`, { skip
     await fs.rm(root, { recursive: true, force: true });
   }
 });
+
+test(`real sbx (${transport}): parallel execs, pty, external sbx rm then re-create, no leaked temp dirs`, { skip: !enabled, timeout: 900_000 }, async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "sbx-e2e-robust-"));
+  const ws = path.join(root, "workspace");
+  await fs.mkdir(ws, { recursive: true });
+  await fs.writeFile(path.join(ws, "seed.txt"), "seed\n");
+  const sdk = await loadSdk();
+  const config = resolveConfig({ command: sbxCmd, transport });
+  const backend = await createBackendFactory({ config, sdk })({
+    scopeKey: `e2e-robust:${process.pid}:${Date.now()}`, workspaceDir: ws, agentWorkspaceDir: ws, cfg: { workspaceAccess: "rw", docker: { env: {} } },
+  });
+  const exec = async (command, extra = {}) => {
+    const spec = await backend.buildExecSpec({ command, env: {}, usePty: false, ...extra });
+    try {
+      return await run(spec.argv);
+    } finally {
+      await backend.finalizeExec?.({ token: spec.finalizeToken });
+    }
+  };
+  try {
+    let r = await exec("cat seed.txt");
+    assert.equal(r.code, 0, r.err);
+
+    // parallel execs (agents fire several tools at once; the ssh transport shares one multiplexed connection)
+    const t0 = Date.now();
+    const rs = await Promise.all(Array.from({ length: 8 }, (_, i) => exec(`echo par-${i}; sleep 1`)));
+    rs.forEach((x, i) => { assert.equal(x.code, 0, x.err); assert.ok(x.out.includes(`par-${i}`)); });
+    console.log(`8 parallel execs (1 s sleep each): ${Date.now() - t0} ms`);
+
+    // pty exec: stdin is not a tty here, so run under script(1)
+    const pty = await backend.buildExecSpec({ command: "tty; echo pty-ok", env: {}, usePty: true });
+    try {
+      r = await run(["script", "-qec", pty.argv.map((a) => `'${a.replaceAll("'", `'\\''`)}'`).join(" "), "/dev/null"]);
+      assert.ok(r.out.includes("pty-ok"), r.out + r.err);
+      console.log(`pty exec output: ${r.out.replace(/\s+/g, " ").trim().slice(0, 80)}`);
+    } finally {
+      await backend.finalizeExec?.({ token: pty.finalizeToken });
+    }
+
+    // sandbox removed behind our back: after the existence cache expires the next exec re-creates it
+    await run([sbxCmd, "rm", "--force", backend.runtimeId]);
+    await new Promise((resolve) => setTimeout(resolve, 11_000));
+    r = await exec("cat seed.txt");
+    assert.equal(r.code, 0, r.err);
+    assert.ok(r.out.includes("seed"), "re-created sandbox sees the mounted workspace");
+
+    if (transport === "ssh") {
+      // finalizeExec must have removed the staged exec dirs inside the sandbox and the private ssh config dirs on the host
+      r = await exec("ls -d /tmp/openclaw-sandbox-exec-* 2>/dev/null | wc -l");
+      assert.equal(r.out.trim(), "1", `only the running exec's own dir may exist, got ${r.out}`);
+    }
+  } finally {
+    await createBackendManager({ config, sdk }).removeRuntime({ entry: { containerName: backend.runtimeId, image: "shell" }, config: {} });
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
