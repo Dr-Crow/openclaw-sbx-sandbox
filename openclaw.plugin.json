@@ -17,6 +17,9 @@
       "kits": { "type": "array", "items": { "type": "string", "minLength": 1 } },
       "staticMcp": { "type": "array", "items": { "type": "string", "minLength": 1 } },
       "workspaceMode": { "type": "string", "enum": ["mount", "clone"] },
+      "transport": { "type": "string", "enum": ["exec", "ssh"] },
+      "sshCommand": { "type": "string", "minLength": 1 },
+      "sshControlPersistSeconds": { "type": "integer", "minimum": 0, "maximum": 3600 },
       "timeoutSeconds": { "type": "number", "minimum": 1, "maximum": 2147000 }
     }
   },
@@ -30,6 +33,9 @@
     "kits": { "label": "Mixin kits", "help": "Extra kit references added with --kit.", "advanced": true },
     "staticMcp": { "label": "Static MCP servers", "help": "sbx MCP gateway server names fixed at create time (--static-mcp).", "advanced": true },
     "workspaceMode": { "label": "Workspace mode", "help": "mount: bind-mount the workspace read-write (changes land on the host immediately). clone: the agent works on a private clone inside the VM and the host repo is read-only; fetch results with git. Needs a git repository.", "advanced": true },
+    "transport": { "label": "Transport", "help": "exec: run commands and file operations through `sbx exec` (default). ssh: run them over SSH through the sbx SSH endpoint using OpenClaw's SSH sandbox helpers (needs ssh on the gateway host; no `sbx setup ssh` required).", "advanced": true },
+    "sshCommand": { "label": "ssh command", "help": "ssh client used by the ssh transport.", "advanced": true },
+    "sshControlPersistSeconds": { "label": "SSH connection reuse (s)", "help": "ssh transport: keep one multiplexed ssh connection per sandbox open this many seconds after last use (0 disables reuse).", "advanced": true },
     "timeoutSeconds": { "label": "Command timeout (s)", "help": "Timeout for sbx management calls such as create.", "advanced": true }
   }
 }
