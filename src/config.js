@@ -6,11 +6,16 @@ export const DEFAULTS = Object.freeze({
   agent: "shell",
   pull: "missing",
   timeoutMs: 120_000,
+  transport: "exec",
+  sshCommand: "ssh",
+  sshControlPersistSeconds: 60,
 });
 
 const MAX_TIMEOUT_SECONDS = 2_147_000;
 const PULL = new Set(["always", "missing", "never"]);
 const WORKSPACE_MODES = new Set(["mount", "clone"]);
+const TRANSPORTS = new Set(["exec", "ssh"]);
+const MAX_CONTROL_PERSIST_SECONDS = 3600;
 const KEYS = new Set([
   "command",
   "agent",
@@ -21,6 +26,9 @@ const KEYS = new Set([
   "kits",
   "staticMcp",
   "workspaceMode",
+  "transport",
+  "sshCommand",
+  "sshControlPersistSeconds",
   "timeoutSeconds",
 ]);
 
@@ -40,7 +48,7 @@ function strList(name, value) {
 
 /**
  * @param {unknown} raw plugins.entries.sbx.config
- * @returns {{command:string, agent:string, template?:string, pull:string, cpus?:number, memory?:string, kits:string[], staticMcp:string[], workspaceMode:"mount"|"clone", timeoutMs:number}}
+ * @returns {{command:string, agent:string, template?:string, pull:string, cpus?:number, memory?:string, kits:string[], staticMcp:string[], workspaceMode:"mount"|"clone", transport:"exec"|"ssh", sshCommand:string, sshControlPersistSeconds:number, timeoutMs:number}}
  */
 export function resolveConfig(raw) {
   const cfg = raw ?? {};
@@ -55,6 +63,19 @@ export function resolveConfig(raw) {
   }
   if (cfg.workspaceMode !== undefined && !WORKSPACE_MODES.has(cfg.workspaceMode)) {
     throw new Error("Invalid sbx plugin config: workspaceMode must be one of mount, clone");
+  }
+  if (cfg.transport !== undefined && !TRANSPORTS.has(cfg.transport)) {
+    throw new Error("Invalid sbx plugin config: transport must be one of exec, ssh");
+  }
+  if (
+    cfg.sshControlPersistSeconds !== undefined &&
+    !(Number.isInteger(cfg.sshControlPersistSeconds) &&
+      cfg.sshControlPersistSeconds >= 0 &&
+      cfg.sshControlPersistSeconds <= MAX_CONTROL_PERSIST_SECONDS)
+  ) {
+    throw new Error(
+      `Invalid sbx plugin config: sshControlPersistSeconds must be an integer between 0 and ${MAX_CONTROL_PERSIST_SECONDS}`,
+    );
   }
   if (cfg.cpus !== undefined && !(Number.isInteger(cfg.cpus) && cfg.cpus >= 1)) {
     throw new Error("Invalid sbx plugin config: cpus must be an integer >= 1");
@@ -80,6 +101,9 @@ export function resolveConfig(raw) {
     kits: cfg.kits === undefined ? [] : strList("kits", cfg.kits),
     staticMcp: cfg.staticMcp === undefined ? [] : strList("staticMcp", cfg.staticMcp),
     workspaceMode: cfg.workspaceMode ?? "mount",
+    transport: cfg.transport ?? DEFAULTS.transport,
+    sshCommand: cfg.sshCommand === undefined ? DEFAULTS.sshCommand : str("sshCommand", cfg.sshCommand),
+    sshControlPersistSeconds: cfg.sshControlPersistSeconds ?? DEFAULTS.sshControlPersistSeconds,
     timeoutMs:
       cfg.timeoutSeconds === undefined ? DEFAULTS.timeoutMs : Math.floor(cfg.timeoutSeconds * 1000),
   };

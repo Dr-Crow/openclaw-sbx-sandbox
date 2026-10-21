@@ -6,6 +6,7 @@ import path from "node:path";
 import { buildSandboxName, findSandbox, runSbxCli } from "./cli.js";
 import { resolveConfig } from "./config.js";
 import { spawnSbx } from "./spawn.js";
+import { closeSshMux, createSshTransport } from "./ssh.js";
 
 const CREATE_TIMEOUT_FLOOR_MS = 300_000;
 // How long a successful "sandbox exists" check is trusted. A sandbox can be removed
@@ -75,7 +76,7 @@ export function createBackendFactory(deps) {
   };
 }
 
-export function createBackendManager({ config }) {
+export function createBackendManager({ config, sdk }) {
   return {
     async describeRuntime({ entry, config: hostConfig }) {
       const cfg = configFromHost(hostConfig, config);
@@ -89,6 +90,8 @@ export function createBackendManager({ config }) {
     async removeRuntime({ entry, config: hostConfig }) {
       const cfg = configFromHost(hostConfig, config);
       verifiedAt.delete(entry.containerName);
+      // ssh transport: drop the multiplexed master first so a re-created sandbox of the same name never meets a stale one.
+      await closeSshMux({ config: cfg, sdk, sandboxName: entry.containerName });
       await runSbxCli({ config: cfg, args: ["rm", "--force", entry.containerName] });
     },
   };
@@ -103,6 +106,16 @@ class SbxBackend {
     this.sandboxName = buildSandboxName(createParams.scopeKey);
     this.workspaceDir = path.resolve(createParams.workspaceDir);
     this.agentWorkspaceDir = path.resolve(createParams.agentWorkspaceDir);
+    // transport "ssh": exec and the fs bridge go over ssh via OpenClaw's SSH helpers; lifecycle stays on the sbx CLI.
+    this.ssh =
+      deps.config.transport === "ssh"
+        ? createSshTransport({
+            config: deps.config,
+            sdk: deps.sdk,
+            sandboxName: this.sandboxName,
+            ensureSandbox: () => this.ensureSandbox(),
+          })
+        : null;
   }
 
   asHandle() {
@@ -118,6 +131,15 @@ class SbxBackend {
       remoteWorkspaceDir: this.workspaceDir,
       remoteAgentWorkspaceDir: this.agentWorkspaceDir,
       buildExecSpec: async ({ command, workdir, env, usePty }) => {
+        if (this.ssh) {
+          const prepared = await this.ssh.prepareExec({ command, workdir: workdir ?? this.workspaceDir, env, usePty });
+          return {
+            argv: prepared.argv,
+            env: this.deps.sdk.sanitizeEnvVars(process.env).allowed,
+            stdinMode: "pipe-open",
+            finalizeToken: prepared.token,
+          };
+        }
         await this.ensureSandbox();
         return {
           argv: [
@@ -134,6 +156,7 @@ class SbxBackend {
           stdinMode: "pipe-open",
         };
       },
+      ...(this.ssh ? { finalizeExec: async ({ token }) => await this.ssh.finalizeExec(token) } : {}),
       runShellCommand: (command) => this.runRemoteShellScript(command),
       createFsBridge: ({ sandbox }) =>
         this.deps.sdk.createRemoteShellSandboxFsBridge({ sandbox, runtime: handle }),
@@ -143,6 +166,7 @@ class SbxBackend {
   }
 
   async runRemoteShellScript(params) {
+    if (this.ssh) return await this.ssh.runScript(params);
     await this.ensureSandbox();
     return await spawnSbx(
       [
