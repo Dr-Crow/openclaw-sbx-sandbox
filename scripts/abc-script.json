@@ -1,0 +1,125 @@
+[
+ {
+  "label": "exec first (creates sandbox)",
+  "tool": "exec",
+  "args": {
+   "command": "echo first; pwd; id -un"
+  }
+ },
+ {
+  "label": "exec warm 1",
+  "tool": "exec",
+  "args": {
+   "command": "true"
+  }
+ },
+ {
+  "label": "exec warm 2",
+  "tool": "exec",
+  "args": {
+   "command": "true"
+  }
+ },
+ {
+  "label": "exec warm 3",
+  "tool": "exec",
+  "args": {
+   "command": "true"
+  }
+ },
+ {
+  "label": "exec warm 4",
+  "tool": "exec",
+  "args": {
+   "command": "true"
+  }
+ },
+ {
+  "label": "exec warm 5",
+  "tool": "exec",
+  "args": {
+   "command": "true"
+  }
+ },
+ {
+  "label": "write",
+  "tool": "write",
+  "args": {
+   "path": "abc/hello.txt",
+   "content": "line one\nline two\n"
+  }
+ },
+ {
+  "label": "read",
+  "tool": "read",
+  "args": {
+   "path": "abc/hello.txt"
+  }
+ },
+ {
+  "label": "edit",
+  "tool": "edit",
+  "args": {
+   "path": "abc/hello.txt",
+   "edits": [
+    {
+     "oldText": "line two",
+     "newText": "line TWO"
+    }
+   ]
+  }
+ },
+ {
+  "label": "apply_patch",
+  "tool": "apply_patch",
+  "args": {
+   "input": "*** Begin Patch\n*** Add File: abc/patched-new.txt\n+created by apply_patch\n*** Update File: abc/hello.txt\n@@\n line one\n-line TWO\n+line 2 patched\n*** End Patch"
+  }
+ },
+ {
+  "label": "exec reads tool-written files",
+  "tool": "exec",
+  "args": {
+   "command": "cat abc/hello.txt abc/patched-new.txt"
+  }
+ },
+ {
+  "label": "exec writes guest file",
+  "tool": "exec",
+  "args": {
+   "command": "echo from-guest > abc/guest.txt; pwd"
+  }
+ },
+ {
+  "label": "read guest-written file",
+  "tool": "read",
+  "args": {
+   "path": "abc/guest.txt"
+  }
+ },
+ {
+  "label": "python3/stat/readlink",
+  "tool": "exec",
+  "args": {
+   "command": "python3 -c 'print(1+1)' && stat -c '%s %F' /etc/hostname && readlink -f /proc/self/cwd && readlink -n /proc/self/cwd | wc -c && stat --version | head -1"
+  }
+ },
+ {
+  "label": "exec with env + PATH",
+  "tool": "exec",
+  "args": {
+   "command": "echo \"FOO=$FOO\"; echo \"$PATH\" | cut -c1-90"
+  }
+ },
+ {
+  "label": "exec sees host-made file",
+  "tool": "exec",
+  "args": {
+   "command": "cat abc/host-made.txt || echo MISSING"
+  },
+  "hostWrite": {
+   "path": "@WORKSPACE@/abc/host-made.txt",
+   "content": "made on host\n"
+  }
+ }
+]
