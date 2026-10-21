@@ -179,9 +179,10 @@ test(`real sbx (${transport}): parallel execs, pty, external sbx rm then re-crea
     assert.ok(r.out.includes("seed"), "re-created sandbox sees the mounted workspace");
 
     if (transport === "ssh") {
-      // finalizeExec must have removed the staged exec dirs inside the sandbox and the private ssh config dirs on the host
+      // staged exec dirs (/tmp/openclaw-sandbox-exec-*) remove themselves before the command runs and finalizeExec
+      // sweeps up the rest; nothing may be left inside the sandbox
       r = await exec("ls -d /tmp/openclaw-sandbox-exec-* 2>/dev/null | wc -l");
-      assert.equal(r.out.trim(), "1", `only the running exec's own dir may exist, got ${r.out}`);
+      assert.equal(r.out.trim(), "0", `staged exec dirs leaked: ${r.out}`);
     }
   } finally {
     await createBackendManager({ config, sdk }).removeRuntime({ entry: { containerName: backend.runtimeId, image: "shell" }, config: {} });
