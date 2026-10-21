@@ -47,12 +47,15 @@ const server = http.createServer((req, res) => {
     if (prev && step > 0 && runLog[step - 1] && runLog[step - 1].ms === undefined) {
       const last = toolMsgs[toolMsgs.length - 1];
       runLog[step - 1].ms = Math.round(now - prev.sentAt);
-      runLog[step - 1].result = textOf(last.content).replace(/\s+/g, " ").slice(0, 400);
+      runLog[step - 1].result = textOf(last.content).replace(/\s+/g, " ").slice(0, Number(process.env.RESULT_CHARS ?? 400));
       runLog[step - 1].isError = /error|failed|not found|escapes|denied|refus|ENOENT|unavailable/i.test(runLog[step - 1].result);
       flush();
     }
     if (step === 0) {
       runLog = [];
+      // record which tools the gateway offered to the model (names only), for tool-policy checks
+      const names = (payload.tools ?? []).map((t) => t?.function?.name ?? t?.name).filter(Boolean).sort();
+      fs.writeFileSync(`${logPath}.tools.json`, JSON.stringify(names, null, 1) + "\n");
     }
     const stream = payload.stream === true;
     const id = `chatcmpl-fake-${Date.now()}`;

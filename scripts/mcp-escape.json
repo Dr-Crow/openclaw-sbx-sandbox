@@ -1,0 +1,48 @@
+[
+ {
+  "label": "exec default (sandbox) whoami+hostname",
+  "tool": "exec",
+  "args": {
+   "command": "id -un; hostname"
+  }
+ },
+ {
+  "label": "exec host=gateway (escape attempt)",
+  "tool": "exec",
+  "args": {
+   "command": "id -un; hostname",
+   "host": "gateway"
+  }
+ },
+ {
+  "label": "exec host=node (escape attempt)",
+  "tool": "exec",
+  "args": {
+   "command": "id -un; hostname",
+   "host": "node"
+  }
+ },
+ {
+  "label": "exec elevated=true (escape attempt)",
+  "tool": "exec",
+  "args": {
+   "command": "id -un; hostname",
+   "elevated": true
+  }
+ },
+ {
+  "label": "exec ask=off per-call override",
+  "tool": "exec",
+  "args": {
+   "command": "echo ask-off-ran",
+   "ask": "off"
+  }
+ },
+ {
+  "label": "exec read VM-only file via sandbox path",
+  "tool": "exec",
+  "args": {
+   "command": "cat /home/jim/.config/openclaw/gateway.env 2>&1 | head -c 100; echo; ls /home/jim/.config 2>&1 | head -3"
+  }
+ }
+]

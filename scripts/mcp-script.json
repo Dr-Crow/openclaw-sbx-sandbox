@@ -1,0 +1,201 @@
+[
+ {
+  "label": "exec in sbx (creates sandbox)",
+  "tool": "exec",
+  "args": {
+   "command": "echo first; pwd; id -un; hostname"
+  }
+ },
+ {
+  "label": "tool_search echo",
+  "tool": "tool_search",
+  "args": {
+   "query": "echo"
+  }
+ },
+ {
+  "label": "tool_describe echo",
+  "tool": "tool_describe",
+  "args": {
+   "id": "mcp:gw_projA:gw_projA__everything__echo"
+  }
+ },
+ {
+  "label": "GW echo via tool_call",
+  "tool": "tool_call",
+  "args": {
+   "id": "mcp:gw_projA:gw_projA__everything__echo",
+   "args": {
+    "message": "hello via gateway"
+   }
+  }
+ },
+ {
+  "label": "GW get-sum via tool_call",
+  "tool": "tool_call",
+  "args": {
+   "id": "mcp:gw_projA:gw_projA__everything__get-sum",
+   "args": {
+    "a": 2,
+    "b": 40
+   }
+  }
+ },
+ {
+  "label": "GW prompts_list (OpenClaw-synthesised)",
+  "tool": "tool_call",
+  "args": {
+   "id": "mcp:gw_projA:gw_projA__prompts_list",
+   "args": {}
+  }
+ },
+ {
+  "label": "exec: worker env has no token",
+  "tool": "exec",
+  "args": {
+   "command": "printenv | grep -c -i -E 'mcp_agt|GW_TOKEN' ; echo rc=$?"
+  }
+ },
+ {
+  "label": "write file in sbx",
+  "tool": "write",
+  "args": {
+   "path": "mcp/note.txt",
+   "content": "written after gateway call\n"
+  }
+ },
+ {
+  "label": "DIRECT name gw_projA__everything__echo",
+  "tool": "gw_projA__everything__echo",
+  "args": {
+   "message": "direct"
+  }
+ },
+ {
+  "label": "DENY gw write-tier toggle (tool_call)",
+  "tool": "tool_call",
+  "args": {
+   "id": "mcp:gw_projA:gw_projA__everything__toggle-simulated-logging",
+   "args": {}
+  }
+ },
+ {
+  "label": "DENY gw get-env blocked at approval",
+  "tool": "tool_call",
+  "args": {
+   "id": "mcp:gw_projA:gw_projA__everything__get-env",
+   "args": {}
+  }
+ },
+ {
+  "label": "DENY tool_call openclaw:core:web_fetch",
+  "tool": "tool_call",
+  "args": {
+   "id": "openclaw:core:web_fetch",
+   "args": {
+    "url": "http://10.0.2.2:18480/mcp/all"
+   }
+  }
+ },
+ {
+  "label": "DENY tool_call openclaw:core:process",
+  "tool": "tool_call",
+  "args": {
+   "id": "openclaw:core:process",
+   "args": {
+    "action": "list"
+   }
+  }
+ },
+ {
+  "label": "DENY tool_call openclaw:core:ls",
+  "tool": "tool_call",
+  "args": {
+   "id": "openclaw:core:ls",
+   "args": {
+    "path": "."
+   }
+  }
+ },
+ {
+  "label": "DENY tool_call openclaw:core:sessions_spawn",
+  "tool": "tool_call",
+  "args": {
+   "id": "openclaw:core:sessions_spawn",
+   "args": {
+    "task": "x"
+   }
+  }
+ },
+ {
+  "label": "DENY tool_call openclaw:core:cron",
+  "tool": "tool_call",
+  "args": {
+   "id": "openclaw:core:cron",
+   "args": {
+    "action": "list"
+   }
+  }
+ },
+ {
+  "label": "DENY tool_call openclaw:core:gateway",
+  "tool": "tool_call",
+  "args": {
+   "id": "openclaw:core:gateway",
+   "args": {
+    "action": "config.get"
+   }
+  }
+ },
+ {
+  "label": "DENY tool_call openclaw:core:browser",
+  "tool": "tool_call",
+  "args": {
+   "id": "openclaw:core:browser",
+   "args": {
+    "action": "status"
+   }
+  }
+ },
+ {
+  "label": "DENY tool_call openclaw:core:plugins",
+  "tool": "tool_call",
+  "args": {
+   "id": "openclaw:core:plugins",
+   "args": {
+    "action": "list"
+   }
+  }
+ },
+ {
+  "label": "tool_call openclaw:core:skills_read (not in allow)",
+  "tool": "tool_call",
+  "args": {
+   "id": "openclaw:core:skills_read",
+   "args": {
+    "name": "nonexistent"
+   }
+  }
+ },
+ {
+  "label": "DENY direct web_fetch",
+  "tool": "web_fetch",
+  "args": {
+   "url": "http://10.0.2.2:18480/mcp/all"
+  }
+ },
+ {
+  "label": "DENY direct cron",
+  "tool": "cron",
+  "args": {
+   "action": "list"
+  }
+ },
+ {
+  "label": "DENY direct unprefixed echo",
+  "tool": "echo",
+  "args": {
+   "message": "x"
+  }
+ }
+]
