@@ -14,6 +14,7 @@
 // user having run `sbx setup ssh`. The generated block mirrors the stock one except that it enables
 // connection multiplexing (the stock block sets `ControlMaster no`), because every exec costs three
 // ssh round trips (stage, run, cleanup).
+import fsSync from "node:fs";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -24,6 +25,27 @@ export const SBX_HOST_SUFFIX = ".sbx";
 const MAX_CONTROL_DIR_LENGTH = 108 - 1 - 40 - 17 - 1;
 // Same prefix trick as the exec transport: a host PATH must not replace the guest PATH.
 export const PREPEND_PATH_PREFIX = 'export PATH="${OPENCLAW_PREPEND_PATH}:$PATH"; unset OPENCLAW_PREPEND_PATH; ';
+
+/**
+ * ssh's KnownHostsCommand (and a ProxyCommand run from another cwd) needs an absolute program path
+ * ("KnownHostsCommand-ORDER path is not absolute"), so resolve a bare `sbx` through PATH.
+ */
+export function resolveExecutablePath(command, env = process.env) {
+  if (path.isAbsolute(command) || command.includes("/")) return path.resolve(command);
+  const exts = process.platform === "win32" ? (env.PATHEXT ?? ".EXE").split(";") : [""];
+  for (const dir of (env.PATH ?? "").split(path.delimiter).filter(Boolean)) {
+    for (const ext of exts) {
+      const candidate = path.join(dir, command + ext);
+      try {
+        fsSync.accessSync(candidate, fsSync.constants.X_OK);
+        if (fsSync.statSync(candidate).isFile()) return candidate;
+      } catch {
+        /* keep looking */
+      }
+    }
+  }
+  return command;
+}
 
 export function sshHostFor(sandboxName) {
   return `${sandboxName}${SBX_HOST_SUFFIX}`;
@@ -121,7 +143,7 @@ async function openSession({ config, sdk, sandboxName }) {
   return await sdk.createSshSandboxSessionFromConfigText({
     configText: buildSshConfigText({
       sandboxName,
-      sbxCommand: config.command,
+      sbxCommand: resolveExecutablePath(config.command),
       controlDir,
       controlPersistSeconds: controlDir ? config.sshControlPersistSeconds : 0,
     }),
