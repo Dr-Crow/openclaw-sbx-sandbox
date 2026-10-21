@@ -13,7 +13,8 @@ const CREATE_TIMEOUT_FLOOR_MS = 300_000;
 // behind our back (`sbx rm`, `openclaw sandbox recreate`, pruning), so re-check periodically
 // instead of caching forever; `sbx ls` costs ~200 ms.
 export const VERIFY_TTL_MS = 10_000;
-// sandboxName -> time of the last successful existence check. Module-level so the
+// sandboxName -> { at, id } of the last successful existence check (id is sbx's sandbox id, used by the ssh transport
+// to keep a re-created sandbox away from a stale multiplexed connection). Module-level so the
 // manager's removeRuntime (openclaw sandbox recreate / prune) can invalidate it.
 const verifiedAt = new Map();
 
@@ -90,8 +91,12 @@ export function createBackendManager({ config, sdk }) {
     async removeRuntime({ entry, config: hostConfig }) {
       const cfg = configFromHost(hostConfig, config);
       verifiedAt.delete(entry.containerName);
-      // ssh transport: drop the multiplexed master first so a re-created sandbox of the same name never meets a stale one.
-      await closeSshMux({ config: cfg, sdk, sandboxName: entry.containerName });
+      // ssh transport: drop the multiplexed master first (it is keyed by sandbox id, so a re-created sandbox
+      // never meets a stale one; this just stops the idle process early).
+      if (cfg.transport === "ssh") {
+        const found = await findSandbox({ config: cfg, name: entry.containerName });
+        await closeSshMux({ config: cfg, sdk, sandboxName: entry.containerName, sandboxId: found?.id });
+      }
       await runSbxCli({ config: cfg, args: ["rm", "--force", entry.containerName] });
     },
   };
@@ -99,6 +104,7 @@ export function createBackendManager({ config, sdk }) {
 
 class SbxBackend {
   #inflight = null;
+  sandboxId = undefined;
 
   constructor(deps, createParams) {
     this.deps = deps;
@@ -114,6 +120,7 @@ class SbxBackend {
             sdk: deps.sdk,
             sandboxName: this.sandboxName,
             ensureSandbox: () => this.ensureSandbox(),
+            getSandboxId: () => this.sandboxId,
           })
         : null;
   }
@@ -186,10 +193,15 @@ class SbxBackend {
 
   ensureSandbox() {
     if (this.#inflight) return this.#inflight;
-    if (Date.now() - (verifiedAt.get(this.sandboxName) ?? 0) < VERIFY_TTL_MS) return Promise.resolve();
+    const cached = verifiedAt.get(this.sandboxName);
+    if (cached && Date.now() - cached.at < VERIFY_TTL_MS) {
+      this.sandboxId = cached.id;
+      return Promise.resolve();
+    }
     this.#inflight = this.#create()
-      .then(() => {
-        verifiedAt.set(this.sandboxName, Date.now());
+      .then((id) => {
+        this.sandboxId = id;
+        verifiedAt.set(this.sandboxName, { at: Date.now(), id });
       })
       .finally(() => {
         this.#inflight = null;
@@ -199,7 +211,8 @@ class SbxBackend {
 
   async #create() {
     const { config } = this.deps;
-    if (await findSandbox({ config, name: this.sandboxName })) return;
+    const existing = await findSandbox({ config, name: this.sandboxName });
+    if (existing) return existing.id;
     const access = this.createParams.cfg?.workspaceAccess;
     if (access !== "none") {
       // `sbx create` refuses a missing host path when there is no terminal.
@@ -231,8 +244,11 @@ class SbxBackend {
     });
     if (result.code !== 0) {
       // A concurrent creator may have won the race; accept that.
-      if (await findSandbox({ config, name: this.sandboxName })) return;
+      const raced = await findSandbox({ config, name: this.sandboxName });
+      if (raced) return raced.id;
       throw new Error(result.stderr.trim() || "sbx create failed");
     }
+    // The ssh transport needs the id of the sandbox it just created; the other transport ignores it.
+    return config.transport === "ssh" ? (await findSandbox({ config, name: this.sandboxName }))?.id : undefined;
   }
 }

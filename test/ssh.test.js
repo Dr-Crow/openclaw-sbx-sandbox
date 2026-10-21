@@ -17,8 +17,8 @@ function fakes() {
     `#!/bin/sh
 echo "$*" >> "${dir}/sbxlog"
 case "$1" in
-  ls) if [ -s "${dir}/names" ]; then printf '['; sep=''; while read n; do printf '%s{"name":"%s","status":"running"}' "$sep" "$n"; sep=','; done < "${dir}/names"; printf ']\\n'; else echo '[]'; fi ;;
-  create) while [ $# -gt 0 ]; do [ "$1" = "--name" ] && echo "$2" >> "${dir}/names"; shift; done ;;
+  ls) if [ -s "${dir}/names" ]; then printf '['; sep=''; while read n id; do printf '%s{"name":"%s","id":"%s","status":"running"}' "$sep" "$n" "\${id:-none}"; sep=','; done < "${dir}/names"; printf ']\\n'; else echo '[]'; fi ;;
+  create) while [ $# -gt 0 ]; do if [ "$1" = "--name" ]; then c=$(cat "${dir}/counter" 2>/dev/null || echo 0); c=$((c+1)); echo $c > "${dir}/counter"; echo "$2 \${c}aaa-bbbb-cccc-dddd-eeeeeeeeeeee" >> "${dir}/names"; fi; shift; done ;;
   rm) : > "${dir}/names" ;;
 esac
 `,
@@ -103,7 +103,9 @@ test("ssh config text mirrors the stock sbx block and is injection-safe", () => 
   assert.match(t, /User _default_user_/);
   assert.match(t, /StrictHostKeyChecking yes/);
   assert.match(t, /IdentityFile \/dev\/null/);
-  assert.match(t, /ControlMaster auto\n  ControlPath "\/run\/u\/mux\/%C"\n  ControlPersist 30/);
+  assert.match(t, /ControlMaster auto\n  ControlPath "\/run\/u\/mux\/noid00000000-%C"\n  ControlPersist 30/);
+  const withId = buildSshConfigText({ sandboxName: "n", sbxCommand: "sbx", controlDir: "/run/u/mux", controlPersistSeconds: 30, sandboxId: "78ac2524-acb5-42e0-93b3-e1fa2112c09e" });
+  assert.match(withId, /ControlPath "\/run\/u\/mux\/78ac2524acb5-%C"/, "sandbox id (12 alnum chars) is part of the socket name");
   const off = buildSshConfigText({ sandboxName: "n", sbxCommand: "sbx", controlPersistSeconds: 0 });
   assert.match(off, /ControlMaster no\n  ControlPath none/);
   // % in the sbx path must be escaped for ssh token expansion
@@ -280,4 +282,30 @@ test("a bare sbx command is resolved to an absolute path for the ssh config (Kno
   } finally {
     process.env.PATH = old;
   }
+});
+
+test("a re-created sandbox gets its own ssh control socket (stale multiplexed connection is never reused)", async () => {
+  const f = fakes();
+  const sdk = fakeSdk(f.ssh);
+  const ws = fs.mkdtempSync(path.join(os.tmpdir(), "ws-"));
+  const config = resolveConfig({ command: f.sbx, transport: "ssh" });
+  const backend = await createBackendFactory({ config, sdk })(params(ws, { scopeKey: "mux-id" }));
+  const controlPath = (s) => s.configText.match(/ControlPath "([^"]+)"/)[1];
+  await backend.finalizeExec({ token: (await backend.buildExecSpec({ command: "true", env: {}, usePty: false })).finalizeToken });
+  const first = controlPath(sdk.sessions.at(-1));
+  assert.match(first, /\/1aaabbbbcccc-%C$/);
+  // removed behind our back (not through the manager), then the existence cache expires
+  fs.writeFileSync(`${f.dir}/names`, "");
+  const { VERIFY_TTL_MS } = await import("../src/backend.js");
+  const realNow = Date.now;
+  Date.now = () => realNow() + VERIFY_TTL_MS + 1000;
+  try {
+    await backend.finalizeExec({ token: (await backend.buildExecSpec({ command: "true", env: {}, usePty: false })).finalizeToken });
+  } finally {
+    Date.now = realNow;
+  }
+  assert.equal(f.sbxLog().filter((l) => l.startsWith("create ")).length, 2);
+  const second = controlPath(sdk.sessions.at(-1));
+  assert.match(second, /\/2aaabbbbcccc-%C$/);
+  assert.notEqual(second, first);
 });

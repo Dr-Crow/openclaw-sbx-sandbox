@@ -22,7 +22,8 @@ import { spawnSbx } from "./spawn.js";
 
 export const SBX_HOST_SUFFIX = ".sbx";
 // `ssh` creates the control socket as "<ControlPath>.<16 random chars>" before renaming; sun_path is 108 bytes.
-const MAX_CONTROL_DIR_LENGTH = 108 - 1 - 40 - 17 - 1;
+const CONTROL_KEY_LENGTH = 12;
+const MAX_CONTROL_DIR_LENGTH = 108 - 1 - (CONTROL_KEY_LENGTH + 1) - 40 - 17 - 1;
 // Same prefix trick as the exec transport: a host PATH must not replace the guest PATH.
 export const PREPEND_PATH_PREFIX = 'export PATH="${OPENCLAW_PREPEND_PATH}:$PATH"; unset OPENCLAW_PREPEND_PATH; ';
 
@@ -60,9 +61,11 @@ function quoteSshConfig(field, value) {
 /**
  * ssh_config text for one sandbox. Mirrors the block `sbx setup ssh` generates for `*.sbx`, plus
  * optional connection multiplexing. `Host` must be the first directive (the SDK parses it).
- * @param {{ sandboxName: string, sbxCommand: string, controlDir?: string, controlPersistSeconds?: number }} p
+ * The control socket name carries sbx's sandbox id: a sandbox that was removed and re-created under the same name
+ * must not reuse a multiplexed connection that still points at the old one (sbx answers "sandbox identity changed").
+ * @param {{ sandboxName: string, sbxCommand: string, controlDir?: string, controlPersistSeconds?: number, sandboxId?: string }} p
  */
-export function buildSshConfigText({ sandboxName, sbxCommand, controlDir, controlPersistSeconds = 0 }) {
+export function buildSshConfigText({ sandboxName, sbxCommand, controlDir, controlPersistSeconds = 0, sandboxId }) {
   if (!/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(sandboxName)) throw new Error(`Unsafe sandbox name for ssh host: ${sandboxName}`);
   const sbx = quoteSshConfig("sbx command", sbxCommand);
   const lines = [
@@ -84,13 +87,18 @@ export function buildSshConfigText({ sandboxName, sbxCommand, controlDir, contro
     lines.push(
       "  ControlMaster auto",
       // quoteSshConfig returns "<dir>" with `%` escaped; append the real %C token (hash of host/user/port) inside the quotes.
-      `  ControlPath ${quoteSshConfig("ControlPath", controlDir).slice(0, -1)}/%C"`,
+      `  ControlPath ${quoteSshConfig("ControlPath", controlDir).slice(0, -1)}/${controlKey(sandboxId)}-%C"`,
       `  ControlPersist ${controlPersistSeconds}`,
     );
   } else {
     lines.push("  ControlMaster no", "  ControlPath none");
   }
   return `${lines.join("\n")}\n`;
+}
+
+function controlKey(sandboxId) {
+  const key = String(sandboxId ?? "").replace(/[^A-Za-z0-9]/g, "").slice(0, CONTROL_KEY_LENGTH);
+  return key || "noid".padEnd(CONTROL_KEY_LENGTH, "0");
 }
 
 /** Private (0700, owned by us) directory for ssh control sockets. Returns undefined when none is usable. */
@@ -138,7 +146,7 @@ export function assertSshSdk(sdk) {
   }
 }
 
-async function openSession({ config, sdk, sandboxName }) {
+async function openSession({ config, sdk, sandboxName, sandboxId }) {
   const controlDir = config.sshControlPersistSeconds > 0 ? await ensureControlDir(sdk) : undefined;
   return await sdk.createSshSandboxSessionFromConfigText({
     configText: buildSshConfigText({
@@ -146,6 +154,7 @@ async function openSession({ config, sdk, sandboxName }) {
       sbxCommand: resolveExecutablePath(config.command),
       controlDir,
       controlPersistSeconds: controlDir ? config.sshControlPersistSeconds : 0,
+      sandboxId,
     }),
     host: sshHostFor(sandboxName),
     command: config.sshCommand,
@@ -153,11 +162,11 @@ async function openSession({ config, sdk, sandboxName }) {
 }
 
 /** Stop the multiplexed master for a sandbox, if any. Never throws. */
-export async function closeSshMux({ config, sdk, sandboxName }) {
+export async function closeSshMux({ config, sdk, sandboxName, sandboxId }) {
   if (config.transport !== "ssh" || config.sshControlPersistSeconds <= 0) return;
   let session;
   try {
-    session = await openSession({ config, sdk, sandboxName });
+    session = await openSession({ config, sdk, sandboxName, sandboxId });
     await spawnSbx([session.command ?? config.sshCommand, "-F", session.configPath, "-O", "exit", session.host], {
       allowFailure: true,
       timeoutMs: 10_000,
@@ -171,11 +180,11 @@ export async function closeSshMux({ config, sdk, sandboxName }) {
 
 /**
  * Exec and one-shot script transport over ssh. `ensureSandbox` is the lifecycle hook (sbx create on demand).
- * @param {{ config: any, sdk: any, sandboxName: string, ensureSandbox: () => Promise<void> }} deps
+ * @param {{ config: any, sdk: any, sandboxName: string, ensureSandbox: () => Promise<void>, getSandboxId?: () => string | undefined }} deps
  */
-export function createSshTransport({ config, sdk, sandboxName, ensureSandbox }) {
+export function createSshTransport({ config, sdk, sandboxName, ensureSandbox, getSandboxId }) {
   assertSshSdk(sdk);
-  const newSession = () => openSession({ config, sdk, sandboxName });
+  const newSession = () => openSession({ config, sdk, sandboxName, sandboxId: getSandboxId?.() });
   const dispose = (session) => sdk.disposeSshSandboxSession(session);
 
   return {
