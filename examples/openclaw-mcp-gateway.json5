@@ -31,7 +31,7 @@
   plugins: {
     allow: ["sbx"],                              // `[]` does NOT mean none: 42 of 66 plugins stayed enabled
     slots: { memory: "none" },
-    load: { paths: ["/home/jim/src/openclaw-sbx-sandbox"] },
+    load: { paths: ["/path/to/openclaw-sbx-sandbox"] },
     entries: { sbx: { enabled: true, config: { agent: "shell", transport: "ssh" } } },
   },
   agents: {
@@ -41,7 +41,7 @@
       sandbox: { mode: "all", scope: "agent", backend: "sbx", workspaceAccess: "rw" },
     },
     entries: { projA: {
-      workspace: "/home/jim/oc-gw/ws/projA",
+      workspace: "/path/to/workspaces/projA",
       tools: { allow: ["gw_projA__*", "exec", "read", "write", "edit", "apply_patch"] },
     } },
   },

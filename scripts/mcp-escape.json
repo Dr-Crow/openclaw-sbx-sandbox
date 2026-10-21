@@ -42,7 +42,7 @@
   "label": "exec read VM-only file via sandbox path",
   "tool": "exec",
   "args": {
-   "command": "cat /home/jim/.config/openclaw/gateway.env 2>&1 | head -c 100; echo; ls /home/jim/.config 2>&1 | head -3"
+   "command": "cat /home/user/.config/openclaw/gateway.env 2>&1 | head -c 100; echo; ls /home/user/.config 2>&1 | head -3"
   }
  }
 ]

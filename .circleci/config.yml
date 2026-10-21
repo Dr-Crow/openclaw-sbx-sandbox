@@ -1,0 +1,60 @@
+version: 2.1
+
+# Unit tests need no sbx and no OpenClaw install (fake sbx, fake ssh).
+# The real-sbx end-to-end suite needs /dev/kvm: see the `e2e` job (self-hosted machine runner, optional).
+
+executors:
+  node:
+    docker:
+      - image: cimg/node:lts
+    resource_class: small
+
+jobs:
+  unit:
+    executor: node
+    steps:
+      - checkout
+      - run:
+          name: Node version
+          command: node --version
+      - run:
+          name: Unit tests (fake sbx and ssh)
+          command: npm test
+      - run:
+          name: Package contents
+          command: npm pack --dry-run 2>&1 | tail -30
+
+  e2e:
+    # Requires a machine runner with /dev/kvm, `sbx` installed and signed in, and OpenClaw installed
+    # (OPENCLAW_SANDBOX_SDK pointing at its dist/plugin-sdk/sandbox.js).
+    machine: true
+    resource_class: jim-sandbox/ci-runner-vm
+    parameters:
+      transport:
+        type: enum
+        enum: [exec, ssh]
+    steps:
+      - checkout
+      - run:
+          name: End-to-end against a real sbx (<< parameters.transport >>)
+          command: SBX_E2E=1 SBX_E2E_TRANSPORT=<< parameters.transport >> node --test test/e2e.test.js
+
+workflows:
+  test:
+    jobs:
+      - unit
+
+  # Enable once the runner VM exists and the resource class is registered.
+  nightly-e2e:
+    when:
+      and:
+        - equal: [scheduled_pipeline, << pipeline.trigger_source >>]
+        - equal: ["nightly", << pipeline.schedule.name >>]
+    jobs:
+      - unit
+      - e2e:
+          name: e2e-<< matrix.transport >>
+          requires: [unit]
+          matrix:
+            parameters:
+              transport: [exec, ssh]
