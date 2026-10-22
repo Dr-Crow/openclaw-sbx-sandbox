@@ -2,7 +2,7 @@
   "id": "sbx",
   "categories": ["security"],
   "activation": { "onStartup": true },
-  "name": "Docker Sandboxes (sbx)",
+  "name": "sbx sandbox backend (unofficial, Docker Sandboxes)",
   "description": "OpenClaw sandbox backend that runs agent exec and file tools inside Docker Sandboxes (sbx) microVMs, each with its own kernel and Docker engine.",
   "configSchema": {
     "type": "object",

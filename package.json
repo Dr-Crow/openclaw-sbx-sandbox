@@ -1,5 +1,5 @@
 {
-  "name": "openclaw-sbx-sandbox",
+  "name": "@dr-crow/openclaw-sbx-sandbox",
   "version": "0.2.0",
   "description": "OpenClaw sandbox backend for Docker Sandboxes (sbx) microVMs.",
   "license": "MIT",
@@ -28,7 +28,7 @@
       "./index.js"
     ],
     "install": {
-      "npmSpec": "openclaw-sbx-sandbox",
+      "npmSpec": "@dr-crow/openclaw-sbx-sandbox",
       "defaultChoice": "npm",
       "minHostVersion": ">=2026.10.1"
     },

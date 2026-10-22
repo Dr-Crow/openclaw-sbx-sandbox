@@ -11,8 +11,11 @@ OpenClaw 2026.10, with on-demand create, re-create after removal, sizing, kits a
 ## Install and configure
 
 ```bash
-openclaw plugins install ./openclaw-sbx-sandbox   # or a packed tarball
+openclaw plugins install clawhub:@dr-crow/openclaw-sbx-sandbox   # from ClawHub (OpenClaw up to 2026.10.4 needs the clawhub: prefix)
+openclaw plugins install ./openclaw-sbx-sandbox                  # or from a checkout / packed tarball
 ```
+
+Unofficial: not affiliated with or endorsed by Docker or OpenClaw. "Docker Sandboxes" and `sbx` are Docker's names.
 
 ```json5
 {
