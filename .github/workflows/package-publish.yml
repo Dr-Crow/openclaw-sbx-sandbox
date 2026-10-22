@@ -1,0 +1,34 @@
+name: Publish to ClawHub
+
+# Manual only. Defaults to a dry run. A real publish needs dry_run=false.
+# Secretless (OIDC trusted publishing) once the package exists and
+#   clawhub package trusted-publisher set @dr-crow/openclaw-sbx-sandbox \
+#     --repository Dr-Crow/openclaw-sbx-sandbox --workflow-filename package-publish.yml
+# has been run. The very first release is published by hand.
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: Preview only, publish nothing
+        type: boolean
+        default: true
+      changelog:
+        description: Release notes shown on ClawHub
+        type: string
+        default: ""
+
+permissions: {}
+
+jobs:
+  publish:
+    # Reusable workflow from openclaw/clawhub, pinned to a commit (reviewed, not a branch).
+    uses: openclaw/clawhub/.github/workflows/package-publish.yml@911211fc6cc6384a2cdb3ca0eff6f9031afd25f0
+    permissions:
+      actions: read
+      contents: read
+      id-token: write
+    with:
+      source: ${{ github.repository }}@${{ github.sha }}
+      family: code-plugin
+      dry_run: ${{ inputs.dry_run }}
+      changelog: ${{ inputs.changelog }}
